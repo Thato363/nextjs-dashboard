@@ -1,4 +1,4 @@
-import postgres from 'postgres';
+import postgres from "postgres";
 import {
   CustomerField,
   CustomersTableType,
@@ -6,27 +6,32 @@ import {
   InvoicesTable,
   LatestInvoiceRaw,
   Revenue,
-} from './definitions';
-import { formatCurrency } from './utils';
+} from "./definitions";
+import { formatCurrency } from "./utils";
+import { auth } from "@/auth";
+import {
+  createClient,
+  getSupabaseUserIdByEmail,
+} from "@/lib/supabase/server";
 
-const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+const sql = postgres(process.env.POSTGRES_URL!, { ssl: "require" });
 
 export async function fetchRevenue() {
   try {
     // Artificially delay a response for demo purposes.
     // Don't do this in production :)
 
-    console.log('Fetching revenue data...');
+    console.log("Fetching revenue data...");
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
     const data = await sql<Revenue[]>`SELECT * FROM revenue`;
 
-    console.log('Data fetch completed after 3 seconds.');
+    console.log("Data fetch completed after 3 seconds.");
 
     return data;
   } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch revenue data.');
+    console.error("Database Error:", error);
+    throw new Error("Failed to fetch revenue data.");
   }
 }
 
@@ -46,8 +51,8 @@ export async function fetchLatestInvoices() {
     }));
     return latestInvoices;
   } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch the latest invoices.');
+    console.error("Database Error:", error);
+    throw new Error("Failed to fetch the latest invoices.");
   }
 }
 
@@ -69,10 +74,10 @@ export async function fetchCardData() {
       invoiceStatusPromise,
     ]);
 
-    const numberOfInvoices = Number(data[0][0].count ?? '0');
-    const numberOfCustomers = Number(data[1][0].count ?? '0');
-    const totalPaidInvoices = formatCurrency(data[2][0].paid ?? '0');
-    const totalPendingInvoices = formatCurrency(data[2][0].pending ?? '0');
+    const numberOfInvoices = Number(data[0][0].count ?? "0");
+    const numberOfCustomers = Number(data[1][0].count ?? "0");
+    const totalPaidInvoices = formatCurrency(data[2][0].paid ?? "0");
+    const totalPendingInvoices = formatCurrency(data[2][0].pending ?? "0");
 
     return {
       numberOfCustomers,
@@ -81,8 +86,8 @@ export async function fetchCardData() {
       totalPendingInvoices,
     };
   } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch card data.');
+    console.error("Database Error:", error);
+    throw new Error("Failed to fetch card data.");
   }
 }
 
@@ -117,8 +122,8 @@ export async function fetchFilteredInvoices(
 
     return invoices;
   } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch invoices.');
+    console.error("Database Error:", error);
+    throw new Error("Failed to fetch invoices.");
   }
 }
 
@@ -138,8 +143,8 @@ export async function fetchInvoicesPages(query: string) {
     const totalPages = Math.ceil(Number(data[0].count) / ITEMS_PER_PAGE);
     return totalPages;
   } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch total number of invoices.');
+    console.error("Database Error:", error);
+    throw new Error("Failed to fetch total number of invoices.");
   }
 }
 
@@ -164,8 +169,8 @@ export async function fetchInvoiceById(id: string) {
 
     return invoice[0];
   } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch invoice.');
+    console.error("Database Error:", error);
+    throw new Error("Failed to fetch invoice.");
   }
 }
 
@@ -181,8 +186,8 @@ export async function fetchCustomers() {
 
     return customers;
   } catch (err) {
-    console.error('Database Error:', err);
-    throw new Error('Failed to fetch all customers.');
+    console.error("Database Error:", err);
+    throw new Error("Failed to fetch all customers.");
   }
 }
 
@@ -214,7 +219,71 @@ export async function fetchFilteredCustomers(query: string) {
 
     return customers;
   } catch (err) {
-    console.error('Database Error:', err);
-    throw new Error('Failed to fetch customer table.');
+    console.error("Database Error:", err);
+    throw new Error("Failed to fetch customer table.");
+  }
+}
+
+//New code
+
+export type Patient = {
+  id: string;
+  user_id: string;
+  full_name: string;
+  phone: string | null;
+  date_of_birth: string | null;
+  created_at: string;
+};
+
+export async function fetchPatients(): Promise<Patient[]> {
+  const email = (await auth())?.user?.email;
+  if (!email) {
+    throw new Error("You must be signed in to view patients.");
+  }
+
+  try {
+    const userId = await getSupabaseUserIdByEmail(email);
+    if (!userId) {
+      return [];
+    }
+
+    const { data, error } = await createClient()
+      .from("patients")
+      .select("id, user_id, full_name, phone, date_of_birth, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return (data ?? []) as Patient[];
+  } catch (error) {
+    console.error("Failed to fetch patients:", error);
+    throw new Error("Failed to fetch patients.");
+  }
+}
+
+export async function fetchPatientById(id: string): Promise<Patient | null> {
+  const email = (await auth())?.user?.email;
+  if (!email) {
+    throw new Error("You must be signed in to view patients.");
+  }
+
+  try {
+    const userId = await getSupabaseUserIdByEmail(email);
+    if (!userId) {
+      return null;
+    }
+
+    const { data, error } = await createClient()
+      .from("patients")
+      .select("id, user_id, full_name, phone, date_of_birth, created_at")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return (data as Patient | null) ?? null;
+  } catch (error) {
+    console.error("Failed to fetch patient:", error);
+    throw new Error("Failed to fetch patient.");
   }
 }

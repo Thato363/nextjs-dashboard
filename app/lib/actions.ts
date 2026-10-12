@@ -4,8 +4,12 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import postgres from "postgres";
-import { signIn } from "@/auth";
+import { auth, signIn } from "@/auth";
 import { AuthError } from "next-auth";
+import {
+  createClient,
+  getSupabaseUserIdByEmail,
+} from "@/lib/supabase/server";
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: "require" });
 
@@ -142,4 +146,150 @@ export async function authenticate(
     }
     throw error;
   }
+}
+
+//New Code
+
+const PatientSchema = z.object({
+  full_name: z.string().min(1, { message: 'Please enter the patient\'s full name.' }),
+  phone: z.string().optional(),
+  date_of_birth: z.string().optional(),
+});
+
+export type PatientState = {
+  errors?: {
+    full_name?: string[];
+    phone?: string[];
+    date_of_birth?: string[];
+  };
+  message?: string | null;
+};
+
+export async function createPatient(prevState: PatientState, formData: FormData) {
+  const validated = PatientSchema.safeParse({
+    full_name: formData.get('full_name'),
+    phone: formData.get('phone'),
+    date_of_birth: formData.get('date_of_birth'),
+  });
+  if (!validated.success) {
+    return {
+      errors: validated.error.flatten().fieldErrors,
+      message: 'Missing fields. Failed to create patient.',
+    };
+  }
+  const { full_name, phone, date_of_birth } = validated.data;
+
+  const email = (await auth())?.user?.email;
+  if (!email) {
+    return { message: 'You must be signed in to create a patient.' };
+  }
+
+  try {
+    const userId = await getSupabaseUserIdByEmail(email);
+    if (!userId) {
+      return { message: 'No Supabase account matches your login email.' };
+    }
+
+    const { error } = await createClient().from('patients').insert({
+      user_id: userId,
+      full_name,
+      phone: phone || null,
+      date_of_birth: date_of_birth || null,
+    });
+    if (error) {
+      console.error('Failed to create patient:', error);
+      return { message: 'Database error: failed to create patient.' };
+    }
+  } catch (error) {
+    console.error('Failed to create patient:', error);
+    return { message: 'Database error: failed to create patient.' };
+  }
+
+  revalidatePath('/dashboard/patients');
+  redirect('/dashboard/patients');
+}
+
+export async function updatePatient(
+  id: string,
+  prevState: PatientState,
+  formData: FormData,
+) {
+  const validated = PatientSchema.safeParse({
+    full_name: formData.get('full_name'),
+    phone: formData.get('phone'),
+    date_of_birth: formData.get('date_of_birth'),
+  });
+  if (!validated.success) {
+    return {
+      errors: validated.error.flatten().fieldErrors,
+      message: 'Missing fields. Failed to update patient.',
+    };
+  }
+  const { full_name, phone, date_of_birth } = validated.data;
+
+  const email = (await auth())?.user?.email;
+  if (!email) {
+    return { message: 'You must be signed in to update a patient.' };
+  }
+
+  try {
+    const userId = await getSupabaseUserIdByEmail(email);
+    if (!userId) {
+      return { message: 'No Supabase account matches your login email.' };
+    }
+
+    const { data, error } = await createClient()
+      .from('patients')
+      .update({
+        full_name,
+        phone: phone || null,
+        date_of_birth: date_of_birth || null,
+      })
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select('id')
+      .maybeSingle();
+    if (error) {
+      console.error('Failed to update patient:', error);
+      return { message: 'Database error: failed to update patient.' };
+    }
+    if (!data) {
+      return { message: 'Patient not found.' };
+    }
+  } catch (error) {
+    console.error('Failed to update patient:', error);
+    return { message: 'Database error: failed to update patient.' };
+  }
+
+  revalidatePath('/dashboard/patients');
+  redirect('/dashboard/patients');
+}
+
+export async function deletePatient(id: string) {
+  const email = (await auth())?.user?.email;
+  if (!email) {
+    throw new Error('You must be signed in to delete a patient.');
+  }
+
+  const userId = await getSupabaseUserIdByEmail(email);
+  if (!userId) {
+    throw new Error('No Supabase account matches your login email.');
+  }
+
+  const { data, error } = await createClient()
+    .from('patients')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userId)
+    .select('id')
+    .maybeSingle();
+  if (error) {
+    console.error('Failed to delete patient:', error);
+    throw new Error('Database error: failed to delete patient.');
+  }
+  if (!data) {
+    throw new Error('Patient not found.');
+  }
+
+  revalidatePath('/dashboard/patients');
 }
