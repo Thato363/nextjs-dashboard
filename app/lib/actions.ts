@@ -40,6 +40,14 @@ const FormSchema = z.object({
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 const UpdateInvoice = FormSchema.omit({ date: true });
 
+async function requireClinicAdmin() {
+  const session = await auth();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  if (!session?.user || (role !== "admin" && role !== "doctor")) {
+    throw new Error("Only clinic admins can manage clinic billing.");
+  }
+}
+
 export type State = {
   errors?: {
     customerId?: string[];
@@ -50,6 +58,7 @@ export type State = {
 };
 
 export async function createInvoice(prevState: State, formData: FormData) {
+  await requireClinicAdmin();
   const validatedFields = CreateInvoice.safeParse({
     customerId: formData.get("customerId"),
     amount: formData.get("amount"),
@@ -86,6 +95,7 @@ export async function updateInvoice(
   prevState: State,
   formData: FormData,
 ) {
+  await requireClinicAdmin();
   const validatedFields = UpdateInvoice.safeParse({
     id,
     customerId: formData.get("customerId"),
@@ -119,6 +129,7 @@ export async function updateInvoice(
 }
 
 export async function deleteInvoice(id: string) {
+  await requireClinicAdmin();
   try {
     await sql`DELETE FROM invoices WHERE id = ${id}`;
   } catch (error) {
@@ -204,7 +215,7 @@ export async function createPatient(prevState: PatientState, formData: FormData)
   }
 
   try {
-    const userId = await getSupabaseUserIdByEmail(email);
+    const userId = (session.user as { id?: string }).id ?? await getSupabaseUserIdByEmail(email);
     if (!userId) {
       return { message: 'No Supabase account matches your login email.' };
     }
@@ -267,11 +278,6 @@ export async function updatePatient(
   }
 
   try {
-    const userId = await getSupabaseUserIdByEmail(email);
-    if (!userId) {
-      return { message: 'No Supabase account matches your login email.' };
-    }
-
     const portalUserId = await getSupabaseUserIdByEmail(patientEmail);
     if (!portalUserId) {
       return { message: 'Create the patient account in Supabase Auth before linking this profile.' };
@@ -288,7 +294,6 @@ export async function updatePatient(
         date_of_birth: date_of_birth || null,
       })
       .eq('id', id)
-      .eq('user_id', userId)
       .select('id')
       .maybeSingle();
     if (error) {
@@ -318,16 +323,10 @@ export async function deletePatient(id: string) {
     throw new Error('Only clinic staff can delete patient records.');
   }
 
-  const userId = await getSupabaseUserIdByEmail(email);
-  if (!userId) {
-    throw new Error('No Supabase account matches your login email.');
-  }
-
   const { data, error } = await createClient()
     .from('patients')
     .delete()
     .eq('id', id)
-    .eq('user_id', userId)
     .select('id')
     .maybeSingle();
   if (error) {
@@ -340,3 +339,85 @@ export async function deletePatient(id: string) {
 
   revalidatePath('/dashboard/patients');
 }
+
+const DoctorProfileSchema = z.object({
+  email: z.string().trim().email({ message: "Enter the clinician's Supabase login email." }),
+  full_name: z.string().trim().min(2, { message: "Enter the clinician's full name." }),
+  specialty: z.string().trim().max(120).optional(),
+  practice_number: z.string().trim().max(80).optional(),
+});
+
+export type DoctorProfileState = {
+  message?: string;
+  success?: boolean;
+};
+
+export async function addDoctorProfile(
+  _previousState: DoctorProfileState | undefined,
+  formData: FormData,
+): Promise<DoctorProfileState> {
+  const session = await auth();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  if (!session?.user || (role !== "admin" && role !== "doctor")) {
+    return { message: "Only clinic admins can add clinician profiles." };
+  }
+
+  const validated = DoctorProfileSchema.safeParse({
+    email: formData.get("email"),
+    full_name: formData.get("full_name"),
+    specialty: formData.get("specialty") || undefined,
+    practice_number: formData.get("practice_number") || undefined,
+  });
+  if (!validated.success) {
+    return { message: validated.error.issues[0]?.message ?? "Check the clinician details and try again." };
+  }
+
+  const { email, full_name, specialty, practice_number } = validated.data;
+  try {
+    const userId = await getSupabaseUserIdByEmail(email.toLowerCase());
+    if (!userId) {
+      return { message: "No Supabase Auth account matches that email. Create the clinician's individual login first." };
+    }
+
+    const client = createClient();
+    const { data: patientAccount, error: patientError } = await client
+      .from("patients")
+      .select("id")
+      .eq("portal_user_id", userId)
+      .limit(1)
+      .maybeSingle();
+    if (patientError) throw patientError;
+    if (patientAccount) {
+      return { message: "Use a separate login for clinic staff. This account is linked to a patient record." };
+    }
+
+    const { data: existingProfile, error: profileError } = await client
+      .from("doctor_profiles")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    if (existingProfile) {
+      return { message: "This Auth account already has a clinician profile." };
+    }
+
+    const { error: insertError } = await client.from("doctor_profiles").insert({
+      user_id: userId,
+      full_name,
+      specialty: specialty?.trim() || null,
+      practice_number: practice_number?.trim() || null,
+      role: "admin",
+      is_active: true,
+    });
+    if (insertError) throw insertError;
+  } catch (error) {
+    console.error("Failed to add clinician profile:", error);
+    return { message: "Could not add the clinician profile. Check the Auth account and try again." };
+  }
+
+  revalidatePath("/dashboard/clinicians");
+  revalidatePath("/dashboard/appointments/new");
+  revalidatePath("/dashboard");
+  return { message: `${full_name} now has an active clinician profile with clinic admin access.`, success: true };
+}
+

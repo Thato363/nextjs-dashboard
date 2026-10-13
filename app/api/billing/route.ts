@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { createClient, getSupabaseUserIdByEmail } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 const BillingSchema = z.object({
   patient_id: z.string().uuid(),
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const ownerUserId = await getSupabaseUserIdByEmail(email);
+    const ownerUserId = (session.user as { id?: string }).id;
     if (!ownerUserId) {
       return NextResponse.json({ error: "Your login is not linked to a clinic account." }, { status: 403 });
     }
@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
       .from("patients")
       .select("id, full_name")
       .eq("id", values.patient_id)
-      .eq("user_id", ownerUserId)
       .maybeSingle();
 
     if (patientError) throw patientError;
@@ -96,3 +95,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Could not save this billing record." }, { status: 500 });
   }
 }
+

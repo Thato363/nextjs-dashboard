@@ -35,7 +35,7 @@ export default function AppointmentsList({
   return (
     <div className="w-full rounded-xl bg-gray-50 p-4">
       <h2 className={`${lusitana.className} mb-4 text-xl md:text-2xl`}>
-        {patientName}'s Appointments
+        {patientName}&apos;s Appointments
       </h2>
 
       {appointments.length === 0 ? (
@@ -92,3 +92,4 @@ export default function AppointmentsList({
     </div>
   );
 }
+

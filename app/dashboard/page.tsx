@@ -40,12 +40,24 @@ function getVisitState(appointment: { start_time: string; end_time: string; stat
     return { label: "Checked out", tone: "bg-emerald-100 text-emerald-700" };
   }
 
-  if (start <= now && end >= now) {
+  if (appointment.status === "cancelled") {
+    return { label: "Cancelled", tone: "bg-slate-100 text-slate-600" };
+  }
+
+  if (appointment.status === "no_show") {
+    return { label: "No show", tone: "bg-rose-100 text-rose-700" };
+  }
+
+  if (appointment.status === "checked_in") {
     return { label: "Checked in", tone: "bg-sky-100 text-sky-700" };
   }
 
-  if (start < now) {
+  if (start <= now && end >= now) {
     return { label: "In progress", tone: "bg-amber-100 text-amber-700" };
+  }
+
+  if (start < now) {
+    return { label: "Needs review", tone: "bg-amber-100 text-amber-700" };
   }
 
   return { label: "Scheduled", tone: "bg-violet-100 text-violet-700" };
@@ -102,11 +114,22 @@ export default async function Page() {
   const isDoctor = user?.role === "doctor" || user?.role === "admin";
 
   const scheduledVisits = appointments.filter((appointment) => appointment.status === "scheduled").length;
-  const followUps = appointments.filter((appointment) => appointment.status !== "completed").length;
-  const checkedInCount = appointments.filter((appointment) => getVisitState(appointment).label === "Checked in").length;
-  const checkedOutCount = appointments.filter((appointment) => getVisitState(appointment).label === "Checked out").length;
+  // This is a request-time server render, so time-based visit checks are stable for this response.
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
+  const visitChecksDue = appointments.filter((appointment) =>
+    (appointment.status === "scheduled" || appointment.status === "checked_in") &&
+    new Date(appointment.end_time).getTime() < now,
+  ).length;
+  const checkedInCount = appointments.filter((appointment) => appointment.status === "checked_in").length;
+  const checkedOutCount = appointments.filter((appointment) => appointment.status === "completed").length;
   const clinicPatients = patients;
+  const unlinkedPortalProfiles = clinicPatients.filter((patient) => !patient.portal_user_id).length;
   const livePatientQueue = [...appointments]
+    .filter((appointment) =>
+      appointment.status === "checked_in" ||
+      (appointment.status === "scheduled" && new Date(appointment.end_time).getTime() >= now),
+    )
     .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     .slice(0, 6)
     .map((appointment) => ({
@@ -135,25 +158,25 @@ export default async function Page() {
           <Card title="Active patients" value={clinicPatients.length} type="customers" />
           <Card title="Scheduled visits" value={scheduledVisits} type="pending" />
           <Card title="Checked in" value={checkedInCount} type="invoices" />
-          <Card title="Follow-ups" value={followUps} type="collected" />
+          <Card title="Visit checks due" value={visitChecksDue} type="collected" />
         </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-3">
           <RevenueChart appointments={appointments} />
           <StatusBreakdownChart appointments={appointments} />
           <PaymentMethodChart invoices={medicalInvoices} />
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className={`${lusitana.className} text-xl`}>Live patient intake board</h2>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className={`${lusitana.className} text-xl`}>Today and upcoming</h2>
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{checkedOutCount} checked out</span>
             </div>
 
             <div className="space-y-3">
               {livePatientQueue.length === 0 && (
-                <p className="text-sm text-slate-500">No appointment activity yet.</p>
+                <p className="text-sm text-slate-500">There are no current or upcoming visits to show.</p>
               )}
 
               {livePatientQueue.map((appointment) => (
@@ -182,7 +205,7 @@ export default async function Page() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className={`${lusitana.className} text-xl`}>Clinical notes</h2>
+              <h2 className={`${lusitana.className} text-xl`}>Recent clinical notes</h2>
             <div className="mt-4 space-y-3">
               {medicalRecords.slice(0, 4).map((record) => (
                 <div key={record.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -191,9 +214,36 @@ export default async function Page() {
                   <p className="mt-2 text-xs leading-5 text-slate-600">{record.summary}</p>
                 </div>
               ))}
+                {medicalRecords.length === 0 && (
+                  <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                    Signed clinical notes and results will appear here after a visit.
+                  </p>
+                )}
             </div>
           </div>
         </div>
+
+        {isDoctor && (
+          <section className="mt-6 rounded-2xl border border-teal-100 bg-white p-5 shadow-sm" aria-labelledby="clinic-actions-heading">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Clinic actions</p>
+                <h2 id="clinic-actions-heading" className={`${lusitana.className} mt-1 text-xl text-slate-900`}>Keep today’s care moving</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {visitChecksDue > 0
+                    ? `${visitChecksDue} visit${visitChecksDue === 1 ? "" : "s"} need a status check.`
+                    : "Appointment status and patient access are up to date."}
+                  {` ${unlinkedPortalProfiles} patient profile${unlinkedPortalProfiles === 1 ? " is" : "s are"} not linked to a portal login.`}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <a href="/dashboard/appointments/new" className="rounded-md bg-teal-800 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-900">Book appointment</a>
+                <a href="/dashboard/patients/create" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Add patient</a>
+                <a href="/dashboard/clinicians" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Care team</a>
+              </div>
+            </div>
+          </section>
+        )}
 
         {isDoctor && (
           <div className="mt-6">
@@ -245,3 +295,4 @@ export default async function Page() {
     </main>
   );
 }
+
