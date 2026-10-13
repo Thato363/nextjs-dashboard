@@ -389,13 +389,29 @@ export async function addDoctorProfile(
 
     let userId = await getSupabaseUserIdByEmail(email.toLowerCase());
     if (!userId) {
+      const appOrigin =
+        process.env.NEXT_PUBLIC_APP_URL ??
+        process.env.AUTH_URL ??
+        process.env.NEXTAUTH_URL ??
+        (process.env.VERCEL_PROJECT_PRODUCTION_URL
+          ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+          : process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}`
+            : null);
+      if (!appOrigin) {
+        return { message: "Set the public app URL before sending clinician invitations." };
+      }
+
       const { data: invitation, error: invitationError } = await client.auth.admin.inviteUserByEmail(
         email.toLowerCase(),
-        { data: { full_name } },
+        {
+          data: { full_name },
+          redirectTo: new URL("/auth/set-password", appOrigin).toString(),
+        },
       );
       if (invitationError || !invitation.user) {
         console.error("Failed to invite clinician to Supabase Auth:", invitationError);
-        return { message: "Could not send the clinician invitation. Check Supabase Auth email delivery and try again." };
+        return { message: "Could not send the clinician invitation. Check Supabase email delivery and the allowed redirect URL." };
       }
       userId = invitation.user.id;
       invitationSent = true;
