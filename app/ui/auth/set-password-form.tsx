@@ -40,13 +40,14 @@ export default function SetPasswordForm() {
 
       const currentUrl = new URL(window.location.href);
       const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ""));
-      const cameFromInvitation =
+      const callbackType = currentUrl.searchParams.get("type") ?? hashParams.get("type");
+      const cameFromAuthEmail =
         currentUrl.searchParams.has("code") ||
-        currentUrl.searchParams.get("type") === "invite" ||
-        hashParams.get("type") === "invite";
-      if (!cameFromInvitation) {
+        callbackType === "invite" ||
+        callbackType === "recovery";
+      if (!cameFromAuthEmail) {
         if (active) {
-          setMessage("Open this page from your clinician invitation email to finish setting up your account.");
+          setMessage("Open this page from your secure invitation or password reset email to continue.");
           setReady(true);
         }
         return;
@@ -55,9 +56,9 @@ export default function SetPasswordForm() {
       const { data, error } = await supabase.auth.getUser();
       if (!active) return;
       if (error) {
-        setMessage("This invitation link has expired or was already used. Ask the clinic to send another.");
+        setMessage("This link has expired or was already used. Request another password reset or ask the clinic to resend your invitation.");
       } else if (!data.user) {
-        setMessage("We could not verify this invitation. Ask the clinic to send another.");
+        setMessage("We could not verify this link. Request another password reset or ask the clinic to resend your invitation.");
       }
       setHasSession(Boolean(data.user));
       setReady(true);
@@ -89,7 +90,7 @@ export default function SetPasswordForm() {
     setMessage("");
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
-      setMessage("We could not set your password. Open a fresh invitation or contact the clinic administrator.");
+      setMessage("We could not update your password. Open a fresh email link or contact the clinic administrator.");
       setPending(false);
       return;
     }
@@ -122,4 +123,3 @@ export default function SetPasswordForm() {
     </form>
   );
 }
-

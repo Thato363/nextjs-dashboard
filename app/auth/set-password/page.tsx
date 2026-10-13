@@ -9,7 +9,7 @@ export default function SetPasswordPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">CareFlow clinic access</p>
         <h1 className={`${lusitana.className} mt-2 text-2xl text-slate-900`}>Set your password</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Choose a password for your individual clinician account. You will use it with your email to sign in.
+          Choose a new password from the secure link in your email. You will use it with your email to sign in.
         </p>
         <SetPasswordForm />
         <Link href="/login" className="mt-5 inline-flex text-sm font-medium text-teal-800 hover:underline">
@@ -19,4 +19,3 @@ export default function SetPasswordPage() {
     </main>
   );
 }
-
