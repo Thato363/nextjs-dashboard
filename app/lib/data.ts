@@ -14,8 +14,10 @@ import { formatCurrency } from "./utils";
 import { auth } from "@/auth";
 import {
   createClient,
-  getSupabaseUserIdByEmail,
+  getSupabaseUserIdByEmail, 
 } from "@/lib/supabase/server";
+
+const USE_PLACEHOLDER_DATA = process.env.USE_PLACEHOLDER_DATA === "true";
 
 const sql = process.env.POSTGRES_URL
   ? postgres(process.env.POSTGRES_URL, { ssl: "require" })
@@ -65,13 +67,17 @@ function isMissingPatientGenderColumnError(error: unknown): boolean {
 
 async function withDatabaseFallback<T>(fallback: T, callback: () => Promise<T>): Promise<T> {
   if (!sql) {
-    return fallback;
+    if (USE_PLACEHOLDER_DATA) {
+      return fallback;
+    }
+
+    throw new Error("POSTGRES_URL is not configured. Set the database connection and restart the app.");
   }
 
   try {
     return await callback();
   } catch (error) {
-    if (isDatabaseUnavailableError(error)) {
+    if (USE_PLACEHOLDER_DATA && isDatabaseUnavailableError(error)) {
       console.warn("Database unavailable; using placeholder data instead.");
       return fallback;
     }
