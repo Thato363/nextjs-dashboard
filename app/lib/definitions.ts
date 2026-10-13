@@ -7,6 +7,7 @@ export type User = {
   name: string;
   email: string;
   password: string;
+  role?: "doctor" | "admin" | "patient" | string;
 };
 
 export type Customer = {

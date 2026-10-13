@@ -1,59 +1,56 @@
-import { generateYAxis } from '@/app/lib/utils';
-import { CalendarIcon } from '@heroicons/react/24/outline';
-import { lusitana } from '@/app/ui/fonts';
-import { Revenue } from '@/app/lib/definitions';
+import { CalendarDaysIcon } from "@heroicons/react/24/outline";
+import { lusitana } from "@/app/ui/fonts";
+import type { Appointment } from "@/app/lib/data";
 
-// This component is representational only.
-// For data visualization UI, check out:
-// https://www.tremor.so/
-// https://www.chartjs.org/
-// https://airbnb.io/visx/
+function getMonthlyVisits(appointments: Appointment[]) {
+  const now = new Date();
+  return Array.from({ length: 6 }, (_, index) => {
+    const month = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1);
+    const count = appointments.filter((appointment) => {
+      const start = new Date(appointment.start_time);
+      return start.getFullYear() === month.getFullYear() && start.getMonth() === month.getMonth();
+    }).length;
 
-export default function RevenueChart({ revenue }: { revenue: Revenue[] }) {
-  const chartHeight = 350;
+    return {
+      label: month.toLocaleDateString("en-US", { month: "short" }),
+      count,
+    };
+  });
+}
 
-  const { yAxisLabels, topLabel } = generateYAxis(revenue);
-
-  if (!revenue || revenue.length === 0) {
-    return <p className="mt-4 text-gray-400">No data available.</p>;
-  }
+export default function RevenueChart({ appointments }: { appointments: Appointment[] }) {
+  const months = getMonthlyVisits(appointments);
+  const maximum = Math.max(...months.map((month) => month.count), 1);
 
   return (
-    <div className="w-full md:col-span-4">
-      <h2 className={`${lusitana.className} mb-4 text-xl md:text-2xl`}>
-        Recent Revenue
-      </h2>
-
-      <div className="rounded-xl bg-gray-50 p-4">
-        <div className="sm:grid-cols-13 mt-0 grid grid-cols-12 items-end gap-2 rounded-md bg-white p-4 md:gap-4">
-          <div
-            className="mb-6 hidden flex-col justify-between text-sm text-gray-400 sm:flex"
-            style={{ height: `${chartHeight}px` }}
-          >
-            {yAxisLabels.map((label) => (
-              <p key={label}>{label}</p>
-            ))}
-          </div>
-
-          {revenue.map((month) => (
-            <div key={month.month} className="flex flex-col items-center gap-2">
-              <div
-                className="w-full rounded-md bg-blue-300"
-                style={{
-                  height: `${(chartHeight / topLabel) * month.revenue}px`,
-                }}
-              ></div>
-              <p className="-rotate-90 text-sm text-gray-400 sm:rotate-0">
-                {month.month}
-              </p>
-            </div>
-          ))}
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Appointments</p>
+          <h2 className={`${lusitana.className} mt-1 text-xl text-slate-900`}>Visit volume</h2>
+          <p className="mt-1 text-xs text-slate-500">Visits booked over the last six months</p>
         </div>
-        <div className="flex items-center pb-2 pt-6">
-          <CalendarIcon className="h-5 w-5 text-gray-500" />
-          <h3 className="ml-2 text-sm text-gray-500 ">Last 12 months</h3>
-        </div>
+        <CalendarDaysIcon className="h-5 w-5 text-teal-700" />
       </div>
-    </div>
+
+      <div className="grid h-52 grid-cols-6 items-end gap-3 border-b border-slate-200 px-1 pb-2">
+        {months.map((month) => (
+          <div key={`${month.label}-${month.count}`} className="flex h-full min-w-0 flex-col items-center justify-end gap-2">
+            <span className="text-xs font-semibold tabular-nums text-slate-600">{month.count}</span>
+            <div className="flex h-36 w-full items-end rounded-t-md bg-slate-50">
+              <div
+                className="w-full rounded-t-md bg-gradient-to-t from-teal-700 to-cyan-400 transition-[height]"
+                style={{ height: `${month.count === 0 ? 3 : Math.max((month.count / maximum) * 100, 8)}%` }}
+                title={`${month.count} visits`}
+              />
+            </div>
+            <span className="text-xs text-slate-500">{month.label}</span>
+          </div>
+        ))}
+      </div>
+      {appointments.length === 0 && (
+        <p className="mt-3 text-xs text-slate-500">Appointment activity will appear as visits are booked.</p>
+      )}
+    </section>
   );
 }

@@ -151,24 +151,39 @@ export async function authenticate(
 //New Code
 
 const PatientSchema = z.object({
-  full_name: z.string().min(1, { message: 'Please enter the patient\'s full name.' }),
-  phone: z.string().optional(),
-  date_of_birth: z.string().optional(),
+  full_name: z.string().trim().min(1, { message: 'Please enter the patient\'s full name.' }),
+  email: z.string().trim().email({ message: 'Enter the patient\'s Supabase sign-in email.' }),
+  phone: z.string().trim().min(1, { message: 'Please enter the patient\'s phone number.' }),
+  gender: z.enum(['female', 'male'], {
+    required_error: 'Please select female or male.',
+  }),
+  date_of_birth: z.string().min(1, { message: 'Please enter the patient\'s date of birth.' }).refine(
+    (value) => !Number.isNaN(Date.parse(value)),
+    { message: 'Please enter a valid date of birth.' },
+  ),
 });
 
 export type PatientState = {
   errors?: {
     full_name?: string[];
+    email?: string[];
     phone?: string[];
+    gender?: string[];
     date_of_birth?: string[];
   };
   message?: string | null;
 };
 
+function isClinicStaff(role: string | undefined): boolean {
+  return role === "doctor" || role === "admin";
+}
+
 export async function createPatient(prevState: PatientState, formData: FormData) {
   const validated = PatientSchema.safeParse({
     full_name: formData.get('full_name'),
+    email: formData.get('email'),
     phone: formData.get('phone'),
+    gender: formData.get('gender'),
     date_of_birth: formData.get('date_of_birth'),
   });
   if (!validated.success) {
@@ -177,11 +192,15 @@ export async function createPatient(prevState: PatientState, formData: FormData)
       message: 'Missing fields. Failed to create patient.',
     };
   }
-  const { full_name, phone, date_of_birth } = validated.data;
+  const { full_name, email: patientEmail, phone, gender, date_of_birth } = validated.data;
 
-  const email = (await auth())?.user?.email;
+  const session = await auth();
+  const email = session?.user?.email;
   if (!email) {
     return { message: 'You must be signed in to create a patient.' };
+  }
+  if (!isClinicStaff((session.user as { role?: string }).role)) {
+    return { message: 'Only clinic staff can create patient records.' };
   }
 
   try {
@@ -190,10 +209,18 @@ export async function createPatient(prevState: PatientState, formData: FormData)
       return { message: 'No Supabase account matches your login email.' };
     }
 
+    const portalUserId = await getSupabaseUserIdByEmail(patientEmail);
+    if (!portalUserId) {
+      return { message: 'Create the patient account in Supabase Auth before linking this profile.' };
+    }
+
     const { error } = await createClient().from('patients').insert({
       user_id: userId,
+      portal_user_id: portalUserId,
       full_name,
+      email: patientEmail.toLowerCase(),
       phone: phone || null,
+      gender,
       date_of_birth: date_of_birth || null,
     });
     if (error) {
@@ -206,6 +233,7 @@ export async function createPatient(prevState: PatientState, formData: FormData)
   }
 
   revalidatePath('/dashboard/patients');
+  revalidatePath('/dashboard');
   redirect('/dashboard/patients');
 }
 
@@ -216,7 +244,9 @@ export async function updatePatient(
 ) {
   const validated = PatientSchema.safeParse({
     full_name: formData.get('full_name'),
+    email: formData.get('email'),
     phone: formData.get('phone'),
+    gender: formData.get('gender'),
     date_of_birth: formData.get('date_of_birth'),
   });
   if (!validated.success) {
@@ -225,11 +255,15 @@ export async function updatePatient(
       message: 'Missing fields. Failed to update patient.',
     };
   }
-  const { full_name, phone, date_of_birth } = validated.data;
+  const { full_name, email: patientEmail, phone, gender, date_of_birth } = validated.data;
 
-  const email = (await auth())?.user?.email;
+  const session = await auth();
+  const email = session?.user?.email;
   if (!email) {
     return { message: 'You must be signed in to update a patient.' };
+  }
+  if (!isClinicStaff((session.user as { role?: string }).role)) {
+    return { message: 'Only clinic staff can update patient records.' };
   }
 
   try {
@@ -238,11 +272,19 @@ export async function updatePatient(
       return { message: 'No Supabase account matches your login email.' };
     }
 
+    const portalUserId = await getSupabaseUserIdByEmail(patientEmail);
+    if (!portalUserId) {
+      return { message: 'Create the patient account in Supabase Auth before linking this profile.' };
+    }
+
     const { data, error } = await createClient()
       .from('patients')
       .update({
+        portal_user_id: portalUserId,
         full_name,
+        email: patientEmail.toLowerCase(),
         phone: phone || null,
+        gender,
         date_of_birth: date_of_birth || null,
       })
       .eq('id', id)
@@ -262,13 +304,18 @@ export async function updatePatient(
   }
 
   revalidatePath('/dashboard/patients');
+  revalidatePath('/dashboard');
   redirect('/dashboard/patients');
 }
 
 export async function deletePatient(id: string) {
-  const email = (await auth())?.user?.email;
+  const session = await auth();
+  const email = session?.user?.email;
   if (!email) {
     throw new Error('You must be signed in to delete a patient.');
+  }
+  if (!isClinicStaff((session.user as { role?: string }).role)) {
+    throw new Error('Only clinic staff can delete patient records.');
   }
 
   const userId = await getSupabaseUserIdByEmail(email);

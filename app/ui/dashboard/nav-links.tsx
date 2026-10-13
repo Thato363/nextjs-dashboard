@@ -3,27 +3,42 @@
 import {
   UserGroupIcon,
   HomeIcon,
-  DocumentDuplicateIcon,
+  ClipboardDocumentListIcon,
+  CalendarDaysIcon,
+  CreditCardIcon,
 } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
-// Map of links to display in the side navigation.
-// Depending on the size of the application, this would be stored in a database.
-const links = [
-  { name: "Home", href: "/dashboard", icon: HomeIcon },
-  {
-    name: "Invoices",
-    href: "/dashboard/invoices",
-    icon: DocumentDuplicateIcon,
-  },
-  { name: "Customers", href: "/dashboard/customers", icon: UserGroupIcon },
+const doctorLinks = [
+  { name: "Overview", href: "/dashboard", icon: HomeIcon },
   { name: "Patients", href: "/dashboard/patients", icon: UserGroupIcon },
+  {
+    name: "Appointments",
+    href: "/dashboard/appointments",
+    icon: CalendarDaysIcon,
+  },
+  {
+    name: "Records",
+    href: "/dashboard/records",
+    icon: ClipboardDocumentListIcon,
+  },
+  {
+    name: "Billing",
+    href: "/dashboard/billing",
+    icon: CreditCardIcon,
+  },
 ];
 
-export default function NavLinks() {
+const patientLinks = [
+  { name: "My care", href: "/dashboard/my-care", icon: HomeIcon },
+  { name: "Appointments", href: "/dashboard/appointments", icon: CalendarDaysIcon },
+];
+
+export default function NavLinks({ role }: { role: string }) {
   const pathname = usePathname();
+  const links = role === "patient" ? patientLinks : doctorLinks;
   return (
     <>
       {links.map((link) => {
@@ -33,9 +48,9 @@ export default function NavLinks() {
             key={link.name}
             href={link.href}
             className={clsx(
-              "flex h-[48px] grow items-center justify-center gap-2 rounded-md bg-gray-50 p-3 text-sm font-medium hover:bg-sky-100 hover:text-blue-600 md:flex-none md:justify-start md:p-2 md:px-3",
+              "flex h-[48px] grow items-center justify-center gap-2 rounded-md px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-teal-50 hover:text-teal-800 md:flex-none md:justify-start md:p-2 md:px-3",
               {
-                "bg-sky-100 text-blue-600": pathname === link.href,
+                "bg-teal-50 font-semibold text-teal-800": pathname === link.href || (link.href === "/dashboard/records" && pathname.startsWith("/dashboard/records")) || (link.href === "/dashboard/billing" && pathname.startsWith("/dashboard/billing")),
               },
             )}
           >

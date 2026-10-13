@@ -25,12 +25,34 @@ export default function EditForm({ patient }: { patient: Patient }) {
             defaultValue={patient.full_name}
             className="block w-full rounded-md border border-gray-200 py-2 px-3 text-sm"
             aria-describedby="full_name-error"
+            required
           />
           <div id="full_name-error" aria-live="polite" aria-atomic="true">
             {state.errors?.full_name?.map((error) => (
               <p className="mt-2 text-sm text-red-500" key={error}>
                 {error}
               </p>
+            ))}
+          </div>
+        </div>
+        <div className="mb-4">
+          <label htmlFor="email" className="mb-2 block text-sm font-medium">
+            Patient sign-in email
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            defaultValue={patient.email ?? ""}
+            className="block w-full rounded-md border border-gray-200 py-2 px-3 text-sm"
+            aria-describedby="email-error"
+            required
+          />
+          <p className="mt-1 text-xs text-gray-500">Must match an account already created in Supabase Auth.</p>
+          <div id="email-error" aria-live="polite" aria-atomic="true">
+            {state.errors?.email?.map((error) => (
+              <p className="mt-2 text-sm text-red-500" key={error}>{error}</p>
             ))}
           </div>
         </div>
@@ -44,7 +66,36 @@ export default function EditForm({ patient }: { patient: Patient }) {
             type="tel"
             defaultValue={patient.phone ?? ""}
             className="block w-full rounded-md border border-gray-200 py-2 px-3 text-sm"
+            aria-describedby="phone-error"
+            required
           />
+          <div id="phone-error" aria-live="polite" aria-atomic="true">
+            {state.errors?.phone?.map((error) => (
+              <p className="mt-2 text-sm text-red-500" key={error}>{error}</p>
+            ))}
+          </div>
+        </div>
+        <div className="mb-4">
+          <label htmlFor="gender" className="mb-2 block text-sm font-medium">
+            Gender
+          </label>
+          <select
+            id="gender"
+            name="gender"
+            defaultValue={patient.gender ?? ""}
+            className="block w-full rounded-md border border-gray-200 bg-white py-2 px-3 text-sm"
+            aria-describedby="gender-error"
+            required
+          >
+            <option value="" disabled>Select an option</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+          <div id="gender-error" aria-live="polite" aria-atomic="true">
+            {state.errors?.gender?.map((error) => (
+              <p className="mt-2 text-sm text-red-500" key={error}>{error}</p>
+            ))}
+          </div>
         </div>
         <div className="mb-4">
           <label
@@ -59,7 +110,14 @@ export default function EditForm({ patient }: { patient: Patient }) {
             type="date"
             defaultValue={patient.date_of_birth ?? ""}
             className="block w-full rounded-md border border-gray-200 py-2 px-3 text-sm"
+            aria-describedby="date_of_birth-error"
+            required
           />
+          <div id="date_of_birth-error" aria-live="polite" aria-atomic="true">
+            {state.errors?.date_of_birth?.map((error) => (
+              <p className="mt-2 text-sm text-red-500" key={error}>{error}</p>
+            ))}
+          </div>
         </div>
         <div aria-live="polite" aria-atomic="true">
           {state.message && (

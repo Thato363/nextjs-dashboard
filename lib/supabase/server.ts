@@ -2,6 +2,14 @@ import "server-only";
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
+type GenericRow = Record<string, string | number | boolean | null | undefined>;
+type GenericTable = {
+  Row: GenericRow;
+  Insert: GenericRow;
+  Update: GenericRow;
+  Relationships: [];
+};
+
 type Database = {
   public: {
     Tables: {
@@ -9,29 +17,44 @@ type Database = {
         Row: {
           id: string;
           user_id: string;
+          portal_user_id: string | null;
           full_name: string;
+          email: string;
           phone: string | null;
           date_of_birth: string | null;
+          gender: string | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
+          portal_user_id?: string | null;
           full_name: string;
+          email: string;
           phone?: string | null;
           date_of_birth?: string | null;
+          gender?: string | null;
           created_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
+          portal_user_id?: string | null;
           full_name?: string;
+          email?: string;
           phone?: string | null;
           date_of_birth?: string | null;
+          gender?: string | null;
           created_at?: string;
         };
         Relationships: [];
       };
+      med_appointments: GenericTable;
+      med_invoices: GenericTable;
+      med_records: GenericTable;
+      med_vitals: GenericTable;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      users: GenericTable;
     };
     Views: Record<never, never>;
     Functions: Record<never, never>;
@@ -40,9 +63,9 @@ type Database = {
   };
 };
 
-let supabase: ReturnType<typeof createSupabaseClient<Database>> | undefined;
+let supabase: any | undefined;
 
-export function createClient() {
+export function createClient(): any {
   if (supabase) {
     return supabase;
   }
@@ -56,7 +79,7 @@ export function createClient() {
     );
   }
 
-  supabase = createSupabaseClient<Database>(url, serviceRoleKey, {
+  supabase = createSupabaseClient<any>(url, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -81,7 +104,8 @@ export async function getSupabaseUserIdByEmail(
     }
 
     const user = data.users.find(
-      (candidate) => candidate.email?.toLowerCase() === email.toLowerCase(),
+      (candidate: { email?: string | null; id: string }) =>
+        candidate.email?.toLowerCase() === email.toLowerCase(),
     );
     if (user) {
       return user.id;

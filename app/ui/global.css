@@ -2,6 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+  --clinic-bg: #f4f9ff;
+  --clinic-surface: #ffffff;
+  --clinic-primary: #0f766e;
+  --clinic-secondary: #3b82f6;
+  --clinic-accent: #14b8a6;
+  --clinic-text: #102a43;
+  --clinic-muted: #52607a;
+}
+
+body {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #edf8ff 0%, #f8fafc 100%);
+  color: var(--clinic-text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
 input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
