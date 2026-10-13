@@ -11,13 +11,13 @@ export default function DoctorProfileForm() {
       <div>
         <h2 className="text-base font-semibold text-slate-900">Add a clinician profile</h2>
         <p className="mt-1 text-sm leading-5 text-slate-500">
-          Each clinician needs an individual Supabase Auth login first. Link that email here to grant clinic admin access.
+          Use a separate email for each clinician. Existing Supabase Auth accounts are linked; new accounts receive an invitation to set their own password.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="grid gap-1.5 text-sm font-medium text-slate-700 sm:col-span-2" htmlFor="doctor-email">
-          Supabase login email
+          Clinician email
           <input id="doctor-email" name="email" type="email" required autoComplete="email" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/15" placeholder="doctor@clinic.org" />
         </label>
         <label className="grid gap-1.5 text-sm font-medium text-slate-700 sm:col-span-2" htmlFor="doctor-name">
@@ -41,7 +41,7 @@ export default function DoctorProfileForm() {
       )}
 
       <button type="submit" disabled={pending} className="rounded-md bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-900 disabled:cursor-wait disabled:opacity-60">
-        {pending ? "Saving profile…" : "Add clinician as admin"}
+        {pending ? "Sending invitation…" : "Invite clinician as admin"}
       </button>
     </form>
   );

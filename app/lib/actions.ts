@@ -373,13 +373,34 @@ export async function addDoctorProfile(
   }
 
   const { email, full_name, specialty, practice_number } = validated.data;
+  let invitationSent = false;
   try {
-    const userId = await getSupabaseUserIdByEmail(email.toLowerCase());
-    if (!userId) {
-      return { message: "No Supabase Auth account matches that email. Create the clinician's individual login first." };
+    const client = createClient();
+    const { data: patientEmail, error: patientEmailError } = await client
+      .from("patients")
+      .select("id")
+      .ilike("email", email.toLowerCase())
+      .limit(1)
+      .maybeSingle();
+    if (patientEmailError) throw patientEmailError;
+    if (patientEmail) {
+      return { message: "Use a separate login email for clinicians. This email belongs to a patient profile." };
     }
 
-    const client = createClient();
+    let userId = await getSupabaseUserIdByEmail(email.toLowerCase());
+    if (!userId) {
+      const { data: invitation, error: invitationError } = await client.auth.admin.inviteUserByEmail(
+        email.toLowerCase(),
+        { data: { full_name } },
+      );
+      if (invitationError || !invitation.user) {
+        console.error("Failed to invite clinician to Supabase Auth:", invitationError);
+        return { message: "Could not send the clinician invitation. Check Supabase Auth email delivery and try again." };
+      }
+      userId = invitation.user.id;
+      invitationSent = true;
+    }
+
     const { data: patientAccount, error: patientError } = await client
       .from("patients")
       .select("id")
@@ -418,6 +439,11 @@ export async function addDoctorProfile(
   revalidatePath("/dashboard/clinicians");
   revalidatePath("/dashboard/appointments/new");
   revalidatePath("/dashboard");
-  return { message: `${full_name} now has an active clinician profile with clinic admin access.`, success: true };
+  return {
+    message: invitationSent
+      ? `An invitation was sent to ${email}. Admin access activates when the clinician accepts and sets their own password.`
+      : `${full_name} now has an active clinician profile with clinic admin access.`,
+    success: true,
+  };
 }
 
