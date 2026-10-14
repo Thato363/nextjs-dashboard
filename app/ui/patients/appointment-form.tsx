@@ -85,6 +85,10 @@ export default function AppointmentForm({
 
         const data = await response.json();
         if (!response.ok) {
+          // 409 = the slot clashes with another appointment; show it next to the time fields.
+          if (response.status === 409) {
+            return { message: null, errors: { start_time: [data.error ?? "That time is not available."] } };
+          }
           return { message: data.error ?? "Failed to book appointment.", errors: {} };
         }
 
