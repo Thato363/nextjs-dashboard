@@ -833,6 +833,58 @@ export async function fetchMedicalInvoices(): Promise<MedicalInvoice[]> {
 }
 
 
+export type MedicalVitals = {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  timestamp: string;
+  systolic_pressure: number | null;
+  diastolic_pressure: number | null;
+  heart_rate: number | null;
+  temperature: number | null;
+  weight_kg: number | null;
+  height_cm: number | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export async function fetchMedicalVitals(): Promise<MedicalVitals[]> {
+  const email = (await auth())?.user?.email;
+  if (!email) {
+    throw new Error("You must be signed in to view vitals.");
+  }
+
+  try {
+    const ownedPatients = await fetchPatients();
+    const ownedPatientIds = ownedPatients.map((patient) => patient.id);
+    if (ownedPatientIds.length === 0) return [];
+
+    const { data, error } = await createClient()
+      .from("med_vitals")
+      .select("id, patient_id, doctor_id, timestamp, systolic_pressure, diastolic_pressure, heart_rate, temperature, weight_kg, height_cm, notes, created_at")
+      .in("patient_id", ownedPatientIds)
+      .order("timestamp", { ascending: false });
+
+    if (error) {
+      if (isMissingSupabaseTableError(error)) {
+        console.warn("Vitals table is not available; returning an empty list.");
+        return [];
+      }
+      throw error;
+    }
+
+    return (data ?? []) as MedicalVitals[];
+  } catch (error) {
+    if (isMissingSupabaseTableError(error)) {
+      console.warn("Vitals table is not available; returning an empty list.");
+      return [];
+    }
+
+    console.error("Failed to fetch vitals:", error);
+    throw new Error("Failed to fetch vitals.");
+  }
+}
+
 export async function fetchLiveMedicalRecords() {
   const records = await fetchMedicalRecords();
   const live = [...records];
