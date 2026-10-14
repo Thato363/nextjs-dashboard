@@ -29,6 +29,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const role = (session.user as { role?: string }).role ?? "patient";
+    if (role !== "patient" && role !== "doctor" && role !== "admin") {
+      return NextResponse.json({ error: "You do not have access to book appointments." }, { status: 403 });
+    }
+
     const body = await request.json();
     const { patient_id, doctor_id, start_time, end_time, reason } = body;
 
@@ -64,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     const email = session.user.email;
-    const userId = await getSupabaseUserIdByEmail(email);
+    const userId = (session.user as { id?: string }).id ?? await getSupabaseUserIdByEmail(email);
 
     if (!userId) {
       return NextResponse.json(
@@ -74,14 +79,14 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createClient();
-    const role = (session.user as { role?: string }).role;
-    const patientScope = role === "patient" ? "portal_user_id" : "user_id";
-    const { data: patient, error: patientError } = await supabase
+    const patientQuery = supabase
       .from("patients")
       .select("id, full_name")
       .eq("id", patient_id)
-      .eq(patientScope, userId)
-      .maybeSingle();
+    const scopedPatientQuery = role === "patient"
+      ? patientQuery.or(`portal_user_id.eq.${userId},user_id.eq.${userId}`)
+      : patientQuery;
+    const { data: patient, error: patientError } = await scopedPatientQuery.maybeSingle();
 
     if (patientError) throw patientError;
     if (!patient) {
@@ -92,10 +97,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { data: doctor, error: doctorError } = await supabase
-      .from("users")
-      .select("id, name, role")
-      .eq("id", doctor_id)
-      .in("role", ["doctor", "admin"])
+      .from("doctor_profiles")
+      .select("user_id, full_name, role, is_active")
+      .eq("user_id", doctor_id)
+      .eq("role", "admin")
+      .eq("is_active", true)
       .maybeSingle();
 
     if (doctorError) throw doctorError;
@@ -129,7 +135,7 @@ export async function POST(request: NextRequest) {
         patient_id,
         doctor_id,
         patient_name: patient.full_name,
-        doctor_name: doctor.name,
+        doctor_name: doctor.full_name,
         start_time: parsedStartTime.toISOString(),
         end_time: parsedEndTime.toISOString(),
         reason: reason.trim(),
@@ -156,3 +162,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

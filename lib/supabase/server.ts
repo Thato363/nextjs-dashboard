@@ -53,7 +53,33 @@ type Database = {
       med_invoices: GenericTable;
       med_records: GenericTable;
       med_vitals: GenericTable;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      doctor_profiles: {
+        Row: {
+          user_id: string;
+          full_name: string;
+          role: "admin";
+          specialty: string | null;
+          practice_number: string | null;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          full_name: string;
+          role?: "admin";
+          specialty?: string | null;
+          practice_number?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          full_name?: string;
+          specialty?: string | null;
+          practice_number?: string | null;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
       users: GenericTable;
     };
     Views: Record<never, never>;
@@ -118,3 +144,4 @@ export async function getSupabaseUserIdByEmail(
     page += 1;
   }
 }
+

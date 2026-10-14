@@ -6,6 +6,7 @@ import {
   ClipboardDocumentListIcon,
   CalendarDaysIcon,
   CreditCardIcon,
+  IdentificationIcon,
 } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -29,6 +30,11 @@ const doctorLinks = [
     href: "/dashboard/billing",
     icon: CreditCardIcon,
   },
+  {
+    name: "Care team",
+    href: "/dashboard/clinicians",
+    icon: IdentificationIcon,
+  },
 ];
 
 const patientLinks = [
@@ -50,7 +56,7 @@ export default function NavLinks({ role }: { role: string }) {
             className={clsx(
               "flex h-[48px] grow items-center justify-center gap-2 rounded-md px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-teal-50 hover:text-teal-800 md:flex-none md:justify-start md:p-2 md:px-3",
               {
-                "bg-teal-50 font-semibold text-teal-800": pathname === link.href || (link.href === "/dashboard/records" && pathname.startsWith("/dashboard/records")) || (link.href === "/dashboard/billing" && pathname.startsWith("/dashboard/billing")),
+                "bg-teal-50 font-semibold text-teal-800": pathname === link.href || (link.href === "/dashboard/records" && pathname.startsWith("/dashboard/records")) || (link.href === "/dashboard/billing" && pathname.startsWith("/dashboard/billing")) || (link.href === "/dashboard/clinicians" && pathname.startsWith("/dashboard/clinicians")),
               },
             )}
           >
@@ -62,3 +68,4 @@ export default function NavLinks({ role }: { role: string }) {
     </>
   );
 }
+

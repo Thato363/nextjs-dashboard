@@ -10,10 +10,12 @@ import { Button } from './button';
 import { useActionState } from "react";
 import { authenticate } from "@/app/lib/actions";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const passwordUpdated = searchParams.get("password") === "updated";
   const [errorMessage, formAction, isPending] = useActionState(
     authenticate,
     undefined,
@@ -61,17 +63,28 @@ export default function LoginForm() {
               />
               <KeyIcon className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400 peer-focus:text-teal-700" />
             </div>
+            <div className="mt-2 flex justify-end">
+              <Link href="/login/forgot-password" className="text-sm font-medium text-teal-800 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
           </div>
         </div>
         <input type="hidden" name="redirectTo" value={callbackUrl} />
-        <Button className="mt-2 w-full bg-teal-800 hover:bg-teal-900" aria-disabled={isPending}>
-          Sign in <ArrowRightIcon className="ml-auto h-5 w-5 text-white" />
+        <Button type="submit" disabled={isPending} className="mt-2 w-full bg-teal-800 hover:bg-teal-900">
+          {isPending ? "Signing in…" : "Sign in"}
+          <ArrowRightIcon className="ml-auto h-5 w-5 text-white" />
         </Button>
         <div
           className="flex min-h-8 items-center gap-2"
           aria-live="polite"
           aria-atomic="true"
         >
+          {passwordUpdated && !errorMessage && (
+            <p role="status" className="text-sm text-emerald-700">
+              Password updated. Sign in with your new password.
+            </p>
+          )}
           {errorMessage && (
             <>
               <ExclamationCircleIcon className="h-5 w-5 text-red-500" />

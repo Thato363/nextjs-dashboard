@@ -408,19 +408,20 @@ export async function fetchPatients(): Promise<Patient[]> {
   }
 
   try {
-    const userId = await getSupabaseUserIdByEmail(email);
+    const userId = (session.user as { id?: string }).id ?? await getSupabaseUserIdByEmail(email);
     if (!userId) {
       return [];
     }
 
     const client = createClient();
     const isPatient = (session.user as { role?: string }).role === "patient";
-    const scopeColumn = isPatient ? "portal_user_id" : "user_id";
-    const { data, error } = await client
+    const patientsQuery = client
       .from("patients")
       .select("id, user_id, portal_user_id, full_name, email, phone, date_of_birth, gender, created_at")
-      .eq(scopeColumn, userId)
-      .order("created_at", { ascending: false });
+    const scopedPatientsQuery = isPatient
+      ? patientsQuery.or(`portal_user_id.eq.${userId},user_id.eq.${userId}`)
+      : patientsQuery;
+    const { data, error } = await scopedPatientsQuery.order("created_at", { ascending: false });
 
     if (error) {
       if (isMissingPatientGenderColumnError(error)) {
@@ -428,10 +429,11 @@ export async function fetchPatients(): Promise<Patient[]> {
         const legacyResult = await client
           .from("patients")
           .select("id, user_id, portal_user_id, full_name, email, phone, date_of_birth, created_at")
-          .eq(scopeColumn, userId)
-          .order("created_at", { ascending: false });
-        if (legacyResult.error) throw legacyResult.error;
-        return ((legacyResult.data ?? []).map((patient: Omit<Patient, "gender">) => ({ ...patient, gender: null }))) as Patient[];
+        const scopedLegacyResult = isPatient
+          ? await legacyResult.or(`portal_user_id.eq.${userId},user_id.eq.${userId}`).order("created_at", { ascending: false })
+          : await legacyResult.order("created_at", { ascending: false });
+        if (scopedLegacyResult.error) throw scopedLegacyResult.error;
+        return ((scopedLegacyResult.data ?? []).map((patient: Omit<Patient, "gender">) => ({ ...patient, gender: null }))) as Patient[];
       }
       if (isMissingSupabaseTableError(error)) {
         console.warn("Patient table is not available; returning an empty list.");
@@ -460,20 +462,21 @@ export async function fetchPatientById(id: string): Promise<Patient | null> {
   }
 
   try {
-    const userId = await getSupabaseUserIdByEmail(email);
+    const userId = (session.user as { id?: string }).id ?? await getSupabaseUserIdByEmail(email);
     if (!userId) {
       return null;
     }
 
     const client = createClient();
     const isPatient = (session.user as { role?: string }).role === "patient";
-    const scopeColumn = isPatient ? "portal_user_id" : "user_id";
-    const { data, error } = await client
+    const patientQuery = client
       .from("patients")
       .select("id, user_id, portal_user_id, full_name, email, phone, date_of_birth, gender, created_at")
       .eq("id", id)
-      .eq(scopeColumn, userId)
-      .maybeSingle();
+    const scopedPatientQuery = isPatient
+      ? patientQuery.or(`portal_user_id.eq.${userId},user_id.eq.${userId}`)
+      : patientQuery;
+    const { data, error } = await scopedPatientQuery.maybeSingle();
 
     if (error) {
       if (isMissingPatientGenderColumnError(error)) {
@@ -482,7 +485,7 @@ export async function fetchPatientById(id: string): Promise<Patient | null> {
           .from("patients")
           .select("id, user_id, portal_user_id, full_name, email, phone, date_of_birth, created_at")
           .eq("id", id)
-          .eq(scopeColumn, userId)
+          .or(`portal_user_id.eq.${userId},user_id.eq.${userId}`)
           .maybeSingle();
         if (legacyResult.error) throw legacyResult.error;
         return legacyResult.data ? ({ ...legacyResult.data, gender: null } as Patient) : null;
@@ -849,20 +852,18 @@ export async function fetchLiveMedicalRecords() {
 }
 
 export async function fetchUsers() {
-  const email = (await auth())?.user?.email;
-  if (!email) {
+  const session = await auth();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  if (!session?.user || (role !== "doctor" && role !== "admin" && role !== "patient")) {
     throw new Error("You must be signed in to view doctors.");
   }
 
   try {
-    const userId = await getSupabaseUserIdByEmail(email);
-    if (!userId) {
-      return [];
-    }
-
     const { data, error } = await createClient()
-      .from("users")
-      .select("id, name, email, role");
+      .from("doctor_profiles")
+      .select("user_id, full_name, specialty, practice_number")
+      .eq("is_active", true)
+      .order("full_name", { ascending: true });
 
     if (error) {
       if (isMissingSupabaseTableError(error)) {
@@ -873,11 +874,12 @@ export async function fetchUsers() {
       throw new Error("Failed to fetch doctors.");
     }
 
-    return (((data ?? []) as unknown) as { id: string; name: string; email: string; role: string }[])
-      .filter((u) => u.role === "doctor" || u.role === "admin")
-      .map((u) => ({
-      id: u.id,
-      full_name: u.name,
+    return ((data ?? []) as { user_id: string; full_name: string; specialty: string | null; practice_number: string | null }[])
+      .map((doctor) => ({
+        id: doctor.user_id,
+        full_name: doctor.full_name,
+        specialty: doctor.specialty,
+        practice_number: doctor.practice_number,
       }));
   } catch (error) {
     if (isMissingSupabaseTableError(error)) {
@@ -894,4 +896,5 @@ export async function fetchUsers() {
 export async function fetchDoctors() {
   return fetchUsers();
 }
+
 

@@ -21,6 +21,7 @@ export const authConfig = {
     session({ session, token }) {
       if (session.user) {
         Object.assign(session.user, {
+          id: token.sub,
           role: (token as typeof token & { role?: string }).role ?? "patient",
         });
       }
@@ -61,3 +62,4 @@ export const authConfig = {
   },
   providers: [], // Add providers with an empty array for now
 } satisfies NextAuthConfig;
+

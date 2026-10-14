@@ -21,6 +21,8 @@ export default async function MyCarePage() {
   const ownAppointments = appointments.filter((appointment) => patientIds.has(appointment.patient_id));
   const ownInvoices = invoices.filter((invoice) => patientIds.has(invoice.patient_id));
   const ownRecords = records.filter((record) => patientIds.has(record.patient_id));
+  // This is a request-time server render, so the upcoming list uses the current request time.
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const upcoming = ownAppointments
     .filter((appointment) => new Date(appointment.start_time).getTime() >= now && appointment.status !== "cancelled")
@@ -112,3 +114,4 @@ function Summary({ icon, label, value, detail }: { icon: React.ReactNode; label:
     </section>
   );
 }
+

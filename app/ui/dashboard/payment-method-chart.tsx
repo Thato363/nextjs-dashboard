@@ -26,17 +26,18 @@ export default function PaymentMethodChart({ invoices }: { invoices: MedicalInvo
   });
 
   const totalMix = methods.reduce((sum, method) => sum + (counts.get(method.key) ?? 0), 0);
-  let offset = 0;
-  const slices = methods.map((method) => {
+  const slices = methods.reduce<(typeof methods[number] & { amount: number; percent: number; offset: number })[]>((result, method) => {
     const amount = counts.get(method.key) ?? 0;
     const percent = totalMix ? (amount / totalMix) * 100 : 0;
+    const offset = result.length > 0
+      ? result[result.length - 1].offset + result[result.length - 1].percent
+      : 0;
     const slice = { ...method, amount, percent, offset };
-    offset += percent;
-    return slice;
-  });
+    return [...result, slice];
+  }, []);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-5 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Clinic billing</p>
@@ -46,8 +47,8 @@ export default function PaymentMethodChart({ invoices }: { invoices: MedicalInvo
         <a href="/dashboard/billing" className="text-xs font-semibold text-teal-800 hover:underline">View billing</a>
       </div>
 
-      <div className="flex flex-col items-center gap-5 sm:flex-row sm:justify-center">
-        <div className="relative h-40 w-40 shrink-0" role="img" aria-label={`Paid payment mix totaling ${formatAmount(totalPaid)}`}>
+      <div className="grid min-w-0 justify-items-center gap-5">
+        <div className="relative h-36 w-36 shrink-0" role="img" aria-label={`Paid payment mix totaling ${formatAmount(totalPaid)}`}>
           <svg viewBox="0 0 42 42" className="h-full w-full -rotate-90">
             <circle cx="21" cy="21" r="15.9155" fill="none" stroke="#edf2f5" strokeWidth="8" />
             {totalMix > 0 && slices.filter((slice) => slice.percent > 0).map((slice) => (
@@ -65,18 +66,18 @@ export default function PaymentMethodChart({ invoices }: { invoices: MedicalInvo
             ))}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-xl font-semibold tabular-nums text-slate-900">{formatAmount(totalPaid)}</span>
+            <span className="max-w-full truncate px-2 text-base font-semibold tabular-nums text-slate-900">{formatAmount(totalPaid)}</span>
             <span className="text-xs text-slate-500">paid</span>
           </div>
         </div>
 
-        <ul className="w-full max-w-xs space-y-2">
+        <ul className="w-full min-w-0 space-y-2">
           {slices.map((slice) => (
-            <li key={slice.key} className="flex items-center gap-2 text-xs">
+            <li key={slice.key} className="grid min-w-0 grid-cols-[10px_minmax(0,1fr)_auto_2.25rem] items-center gap-2 text-xs">
               <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: slice.color }} />
-              <span className="flex-1 text-slate-600">{slice.label}</span>
-              <span className="tabular-nums font-medium text-slate-800">{formatAmount(slice.amount)}</span>
-              <span className="w-9 text-right tabular-nums text-slate-500">{totalMix ? `${Math.round(slice.percent)}%` : "0%"}</span>
+              <span className="min-w-0 truncate text-slate-600">{slice.label}</span>
+              <span className="whitespace-nowrap text-right tabular-nums font-medium text-slate-800">{formatAmount(slice.amount)}</span>
+              <span className="text-right tabular-nums text-slate-500">{totalMix ? `${Math.round(slice.percent)}%` : "0%"}</span>
             </li>
           ))}
         </ul>
@@ -90,3 +91,4 @@ export default function PaymentMethodChart({ invoices }: { invoices: MedicalInvo
     </section>
   );
 }
+
