@@ -4,6 +4,9 @@ import { auth } from "@/auth";
 import { createClient, getSupabaseUserIdByEmail } from "@/lib/supabase/server";
 import { fetchAppointments } from "@/app/lib/data";
 
+// Appointments in these states occupy their time slot. Completed, cancelled and no-show ones free it.
+const ACTIVE_APPOINTMENT_STATUSES = ["scheduled", "checked_in"];
+
 export async function GET() {
   try {
     const session = await auth();
@@ -112,19 +115,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: existing, error: conflictError } = await supabase
-      .from("med_appointments")
-      .select("id")
-      .eq("doctor_id", doctor_id)
-      .eq("status", "scheduled")
-      .lt("start_time", parsedEndTime.toISOString())
-      .gt("end_time", parsedStartTime.toISOString())
-      .limit(1);
+    // Two appointments clash when their time ranges overlap (back-to-back is fine) and both are
+    // still active. Check the doctor and the patient: neither can be in two places at once.
+    const overlapsRequestedTime = (query: any) =>
+      query
+        .in("status", ACTIVE_APPOINTMENT_STATUSES)
+        .lt("start_time", parsedEndTime.toISOString())
+        .gt("end_time", parsedStartTime.toISOString())
+        .limit(1);
 
-    if (conflictError) throw conflictError;
-    if (existing?.length) {
+    const [doctorClash, patientClash] = await Promise.all([
+      overlapsRequestedTime(
+        supabase.from("med_appointments").select("id").eq("doctor_id", doctor_id),
+      ),
+      overlapsRequestedTime(
+        supabase.from("med_appointments").select("id").eq("patient_id", patient_id),
+      ),
+    ]);
+
+    if (doctorClash.error) throw doctorClash.error;
+    if (patientClash.error) throw patientClash.error;
+
+    if (doctorClash.data?.length) {
       return NextResponse.json(
-        { error: "This doctor already has a scheduled appointment at that time." },
+        { error: "That doctor is already booked at this time. Please choose a different time." },
+        { status: 409 }
+      );
+    }
+    if (patientClash.data?.length) {
+      return NextResponse.json(
+        { error: "This patient already has an appointment that overlaps this time." },
         { status: 409 }
       );
     }
@@ -144,7 +164,17 @@ export async function POST(request: NextRequest) {
       .select("id, patient_id, doctor_id, patient_name, doctor_name, start_time, end_time, reason, status, created_at")
       .single();
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      // 23P01 = exclusion_violation: the database's overlap constraint caught a booking that
+      // slipped in between our check above and this insert (two people booking at once).
+      if ((insertError as { code?: string }).code === "23P01") {
+        return NextResponse.json(
+          { error: "That time was just taken. Please choose a different time." },
+          { status: 409 }
+        );
+      }
+      throw insertError;
+    }
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/appointments");
