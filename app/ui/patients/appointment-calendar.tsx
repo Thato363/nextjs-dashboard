@@ -5,6 +5,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CalendarDaysIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { lusitana } from "@/app/ui/fonts";
 import { type Appointment } from "@/app/lib/data";
@@ -100,6 +102,22 @@ export default function AppointmentCalendar({
   const [currentMonth, setCurrentMonth] = useState<Date>(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => startOfDay(new Date()));
   const [view, setView] = useState<CalendarView>("month");
+  const [query, setQuery] = useState("");
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredAppointments = normalizedQuery
+    ? appointments.filter((appointment) =>
+        [appointment.patient_name, appointment.doctor_name, appointment.reason].some((field) =>
+          field?.toLowerCase().includes(normalizedQuery),
+        ),
+      )
+    : appointments;
+  const searchResults = normalizedQuery
+    ? [...filteredAppointments].sort(
+        (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
+      )
+    : [];
+  const MAX_SEARCH_RESULTS = 8;
 
   const monthDates = getWeeks(currentMonth).flat();
   const visibleDates = view === "month"
@@ -107,7 +125,7 @@ export default function AppointmentCalendar({
     : view === "week"
       ? getWeek(selectedDate)
       : [selectedDate];
-  const selectedAppointments = appointments
+  const selectedAppointments = filteredAppointments
     .filter((appointment) => isSameDay(new Date(appointment.start_time), selectedDate))
     .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
 
@@ -190,6 +208,68 @@ export default function AppointmentCalendar({
         </div>
       </div>
 
+      <div className="border-b border-slate-200 px-4 py-3 md:px-6">
+        <label htmlFor="appointment-search" className="sr-only">
+          Search appointments by patient, doctor or reason
+        </label>
+        <div className="relative">
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            id="appointment-search"
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by patient, doctor or reason"
+            autoComplete="off"
+            className="block w-full rounded-md border border-slate-200 py-2 pl-9 pr-9 text-sm text-slate-800 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 [&::-webkit-search-cancel-button]:appearance-none"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            >
+              <XMarkIcon className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {normalizedQuery && (
+          <div className="mt-3" aria-live="polite">
+            <p className="text-xs text-slate-500">
+              {searchResults.length === 0
+                ? `No appointments match "${query.trim()}".`
+                : `${searchResults.length} match${searchResults.length === 1 ? "" : "es"} across all dates — select one to jump to that day.`}
+            </p>
+            {searchResults.length > 0 && (
+              <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {searchResults.slice(0, MAX_SEARCH_RESULTS).map((appointment) => (
+                  <li key={appointment.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleDateSelect(startOfDay(new Date(appointment.start_time)))}
+                      className="block w-full rounded-md border border-slate-200 bg-white p-2.5 text-left hover:border-teal-300 hover:bg-teal-50/40"
+                    >
+                      <span className="block truncate text-sm font-semibold text-slate-800">{appointment.patient_name}</span>
+                      <span className="mt-0.5 block text-xs text-slate-600">
+                        {new Date(appointment.start_time).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {formatTime(appointment.start_time)}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-slate-500">{appointment.doctor_name} · {appointment.reason}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {searchResults.length > MAX_SEARCH_RESULTS && (
+              <p className="mt-2 text-xs text-slate-500">
+                Showing the first {MAX_SEARCH_RESULTS} — narrow your search to see the rest.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
       {view !== "day" && (
         <div className="grid grid-cols-7 border-b border-slate-200 bg-teal-700 text-center text-[10px] font-semibold uppercase tracking-wide text-white sm:text-xs">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
@@ -220,7 +300,7 @@ export default function AppointmentCalendar({
       ) : (
         <div className="grid grid-cols-7">
           {visibleDates.map((day) => {
-            const dayAppointments = appointments
+            const dayAppointments = filteredAppointments
               .filter((appointment) => isSameDay(new Date(appointment.start_time), day))
               .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
             const outsideMonth = view === "month" && !isSameMonth(day, currentMonth);
